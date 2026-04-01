@@ -82,6 +82,7 @@ _BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
         "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
         "task_prefix": "live_parallel_",
+        "exclude_task_prefixes": ["live_parallel_multiple_"],
     },
     "live_parallel_multiple": {
         "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
@@ -143,6 +144,7 @@ _BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
         "task_prefix": "parallel_",
+        "exclude_task_prefixes": ["parallel_multiple_"],
     },
     "parallel_multiple": {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
