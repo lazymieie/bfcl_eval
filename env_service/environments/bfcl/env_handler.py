@@ -795,7 +795,9 @@ class EnvHandler:
                         )
                         if formatted_call:
                             formatted_calls.append(formatted_call)
-                    return "\n".join(formatted_calls) if formatted_calls else ""
+                    # AST decoding expects a comma-separated sequence when there
+                    # are multiple function calls in a single turn.
+                    return ", ".join(formatted_calls) if formatted_calls else ""
                 elif message.get("content"):
                     return message["content"]
 
