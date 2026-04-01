@@ -617,12 +617,6 @@ class EnvHandler:
         Returns:
             Tuple of (accuracy, total_count)
         """
-        language = "Python"
-        if "java" in test_category.lower():
-            language = "Java"
-        elif "js" in test_category.lower() or "javascript" in test_category.lower():
-            language = "JavaScript"
-
         with tempfile.TemporaryDirectory() as temp_dir:
             score_dir = Path(temp_dir)
             accuracy, total_count = ast_file_runner(
@@ -630,7 +624,6 @@ class EnvHandler:
                 model_result=[model_result_data],
                 prompt=prompt_data,
                 possible_answer=possible_answer,
-                language=language,
                 test_category=test_category,
                 model_name=model_name,
                 score_dir=score_dir,

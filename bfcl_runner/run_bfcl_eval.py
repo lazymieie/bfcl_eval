@@ -315,7 +315,16 @@ def _select_task_ids(config: "RunnerConfig") -> List[str]:
     if config.bfcl.task_contains:
         task_ids = [task_id for task_id in task_ids if config.bfcl.task_contains in task_id]
 
+    matched_task_count = len(task_ids)
     if config.bfcl.max_tasks is not None:
+        if config.bfcl.max_tasks <= 0:
+            raise ValueError("max_tasks must be a positive integer when provided")
+        if config.bfcl.max_tasks > matched_task_count:
+            print(
+                f"Requested max_tasks={config.bfcl.max_tasks}, but only {matched_task_count} tasks "
+                "match the current benchmark selection. Using all matched tasks.",
+                flush=True,
+            )
         task_ids = task_ids[: config.bfcl.max_tasks]
 
     if not task_ids:
@@ -772,7 +781,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task-ids", default="", help="Comma-separated task ids. When set, split selection is ignored.")
     parser.add_argument("--task-prefix", default=None, help="Keep only task ids starting with this prefix.")
     parser.add_argument("--task-contains", default=None, help="Keep only task ids containing this text.")
-    parser.add_argument("--max-tasks", type=int, default=None)
+    parser.add_argument("--max-tasks", type=int, default=None, help="Maximum number of tasks to run. Defaults to the full selected benchmark when omitted.")
     parser.add_argument("--is-open-query", action="store_true", help="Pass is_open_query=True to BFCL env.")
 
     parser.add_argument("--output-dir", default="bfcl_runner/output/latest")
