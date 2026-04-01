@@ -61,6 +61,12 @@ _BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
     "live": {
         "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefixes": [
+            "live_simple_",
+            "live_multiple_",
+            "live_parallel_",
+            "live_parallel_multiple_",
+        ],
     },
     "live_simple": {
         "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
@@ -95,11 +101,23 @@ _BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
     "non_live": {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefixes": [
+            "simple_python_",
+            "simple_java_",
+            "simple_javascript_",
+            "multiple_",
+            "parallel_",
+            "parallel_multiple_",
+        ],
     },
     "simple": {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
-        "task_prefix": "simple_python_",
+        "task_prefixes": [
+            "simple_python_",
+            "simple_java_",
+            "simple_javascript_",
+        ],
     },
     "simple_python": {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
@@ -135,6 +153,14 @@ _BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
         "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
         "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
         "task_prefix": "irrelevance_",
+    },
+    "hallucination": {
+        "data_path": BFCL_DATA_DIR / "single_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "single_turn_split_ids.json",
+        "task_prefixes": [
+            "irrelevance_",
+            "live_irrelevance_",
+        ],
     },
 }
 
@@ -309,8 +335,22 @@ def _select_task_ids(config: "RunnerConfig") -> List[str]:
     else:
         task_ids = _read_split_ids(config.bfcl.split_ids_path, config.bfcl.split)
 
+    if config.bfcl.task_prefixes:
+        task_ids = [
+            task_id
+            for task_id in task_ids
+            if any(task_id.startswith(prefix) for prefix in config.bfcl.task_prefixes)
+        ]
+
     if config.bfcl.task_prefix:
         task_ids = [task_id for task_id in task_ids if task_id.startswith(config.bfcl.task_prefix)]
+
+    if config.bfcl.exclude_task_prefixes:
+        task_ids = [
+            task_id
+            for task_id in task_ids
+            if not any(task_id.startswith(prefix) for prefix in config.bfcl.exclude_task_prefixes)
+        ]
 
     if config.bfcl.task_contains:
         task_ids = [task_id for task_id in task_ids if config.bfcl.task_contains in task_id]
@@ -328,7 +368,13 @@ def _select_task_ids(config: "RunnerConfig") -> List[str]:
         task_ids = task_ids[: config.bfcl.max_tasks]
 
     if not task_ids:
-        selection = config.bfcl.benchmark or config.bfcl.task_prefix or config.bfcl.task_contains or config.bfcl.split
+        selection = (
+            config.bfcl.benchmark
+            or config.bfcl.task_prefix
+            or config.bfcl.task_prefixes
+            or config.bfcl.task_contains
+            or config.bfcl.split
+        )
         raise ValueError(f"No BFCL tasks matched the current selection: {selection}")
 
     return task_ids
@@ -364,7 +410,9 @@ class BfclConfig:
     benchmark: Optional[str] = None
     split: str = "test"
     task_ids: List[str] = field(default_factory=list)
+    task_prefixes: List[str] = field(default_factory=list)
     task_prefix: Optional[str] = None
+    exclude_task_prefixes: List[str] = field(default_factory=list)
     task_contains: Optional[str] = None
     max_tasks: Optional[int] = None
     is_open_query: bool = False
@@ -677,7 +725,9 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
                 "split_ids_path": args.split_ids_path,
                 "split": args.split,
                 "task_ids": args.task_ids.split(",") if args.task_ids else [],
+                "task_prefixes": args.task_prefixes.split(",") if args.task_prefixes else None,
                 "task_prefix": args.task_prefix,
+                "exclude_task_prefixes": args.exclude_task_prefixes.split(",") if args.exclude_task_prefixes else None,
                 "task_contains": args.task_contains,
                 "max_tasks": args.max_tasks,
                 "is_open_query": args.is_open_query,
@@ -726,7 +776,11 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
         benchmark=merged_bfcl_raw.get("benchmark"),
         split=str(merged_bfcl_raw.get("split", "test")),
         task_ids=[str(task_id) for task_id in merged_bfcl_raw.get("task_ids", [])],
+        task_prefixes=[str(prefix) for prefix in merged_bfcl_raw.get("task_prefixes", []) if str(prefix)],
         task_prefix=merged_bfcl_raw.get("task_prefix"),
+        exclude_task_prefixes=[
+            str(prefix) for prefix in merged_bfcl_raw.get("exclude_task_prefixes", []) if str(prefix)
+        ],
         task_contains=merged_bfcl_raw.get("task_contains"),
         max_tasks=int(merged_bfcl_raw["max_tasks"]) if merged_bfcl_raw.get("max_tasks") is not None else None,
         is_open_query=bool(merged_bfcl_raw.get("is_open_query", False)),
@@ -773,13 +827,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--disable-tools-api", action="store_true", help="Do not pass tools to the API. The model must emit <tool_call> tags in plain text.")
 
-    parser.add_argument("--benchmark", default=None, help="High-level BFCL benchmark selector, such as multi_turn, multi_turn_base, multi_turn_miss_func, multi_turn_miss_param, multi_turn_long_context, single_turn, live, non_live, live_simple, live_multiple, live_parallel, live_parallel_multiple, live_irrelevance, live_relevance, simple, simple_python, simple_java, simple_javascript, multiple, parallel, parallel_multiple, irrelevance.")
+    parser.add_argument("--benchmark", default=None, help="High-level BFCL benchmark selector, such as multi_turn, multi_turn_base, multi_turn_miss_func, multi_turn_miss_param, multi_turn_long_context, single_turn, live, non_live, hallucination, live_simple, live_multiple, live_parallel, live_parallel_multiple, live_irrelevance, live_relevance, simple, simple_python, simple_java, simple_javascript, multiple, parallel, parallel_multiple, irrelevance.")
     parser.add_argument("--data-path", default=None)
     parser.add_argument("--answer-path", default=None)
     parser.add_argument("--split-ids-path", default=None)
     parser.add_argument("--split", default=None)
     parser.add_argument("--task-ids", default="", help="Comma-separated task ids. When set, split selection is ignored.")
+    parser.add_argument("--task-prefixes", default=None, help="Comma-separated task id prefixes. Keeps tasks that match any listed prefix.")
     parser.add_argument("--task-prefix", default=None, help="Keep only task ids starting with this prefix.")
+    parser.add_argument("--exclude-task-prefixes", default=None, help="Comma-separated task id prefixes to exclude after other benchmark filters are applied.")
     parser.add_argument("--task-contains", default=None, help="Keep only task ids containing this text.")
     parser.add_argument("--max-tasks", type=int, default=None, help="Maximum number of tasks to run. Defaults to the full selected benchmark when omitted.")
     parser.add_argument("--is-open-query", action="store_true", help="Pass is_open_query=True to BFCL env.")
