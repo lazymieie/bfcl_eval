@@ -3,7 +3,25 @@ from typing import List, Dict, Union
 from bfcl_eval.constants.type_mappings import JAVA_TYPE_CONVERSION
 
 
+JAVA_TYPE_ALIASES = {
+    "string": "String",
+    "number": "double",
+    "bool": "boolean",
+    "array": "Array",
+    "object": "HashMap",
+    "dict": "HashMap",
+}
+
+
+def _normalize_java_type_name(type_name):
+    return JAVA_TYPE_ALIASES.get(type_name, type_name)
+
+
 def java_type_converter(value, expected_type, nested_type=None):
+    expected_type = _normalize_java_type_name(expected_type)
+    if nested_type is not None:
+        nested_type = _normalize_java_type_name(nested_type)
+
     if expected_type not in JAVA_TYPE_CONVERSION:
         raise ValueError(f"Unsupported type: {expected_type}")
     if (

@@ -2,7 +2,24 @@ import re
 from bfcl_eval.constants.type_mappings import JS_TYPE_CONVERSION
 
 
+JS_TYPE_ALIASES = {
+    "string": "String",
+    "number": "float",
+    "bool": "Boolean",
+    "boolean": "Boolean",
+    "object": "dict",
+}
+
+
+def _normalize_js_type_name(type_name):
+    return JS_TYPE_ALIASES.get(type_name, type_name)
+
+
 def js_type_converter(value, expected_type, nested_type=None):
+    expected_type = _normalize_js_type_name(expected_type)
+    if nested_type is not None:
+        nested_type = _normalize_js_type_name(nested_type)
+
     if expected_type not in JS_TYPE_CONVERSION:
         raise ValueError(f"Unsupported type: {expected_type}")
 
