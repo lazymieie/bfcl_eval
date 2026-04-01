@@ -20,6 +20,124 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+BFCL_ENV_DIR = REPO_ROOT / "env_service" / "environments" / "bfcl"
+BFCL_DATA_DIR = BFCL_ENV_DIR / "bfcl_data"
+BFCL_ANSWER_DIR = BFCL_ENV_DIR / "bfcl_eval" / "possible_answer"
+
+_BENCHMARK_ALIASES = {
+    "multiturn": "multi_turn",
+    "singleturn": "single_turn",
+    "nonlive": "non_live",
+}
+
+_BENCHMARK_PRESETS: Dict[str, Dict[str, Any]] = {
+    "multi_turn": {
+        "data_path": BFCL_DATA_DIR / "multi_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "multi_turn_split_ids.json",
+    },
+    "multi_turn_base": {
+        "data_path": BFCL_DATA_DIR / "multi_turn_base_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "multi_turn_base_split_ids.json",
+    },
+    "multi_turn_miss_func": {
+        "data_path": BFCL_DATA_DIR / "multi_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "multi_turn_split_ids.json",
+        "task_prefix": "multi_turn_miss_func_",
+    },
+    "multi_turn_miss_param": {
+        "data_path": BFCL_DATA_DIR / "multi_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "multi_turn_split_ids.json",
+        "task_prefix": "multi_turn_miss_param_",
+    },
+    "multi_turn_long_context": {
+        "data_path": BFCL_DATA_DIR / "multi_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "multi_turn_split_ids.json",
+        "task_prefix": "multi_turn_long_context_",
+    },
+    "single_turn": {
+        "data_path": BFCL_DATA_DIR / "single_turn_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "single_turn_split_ids.json",
+    },
+    "live": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+    },
+    "live_simple": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_simple_",
+    },
+    "live_multiple": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_multiple_",
+    },
+    "live_parallel": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_parallel_",
+    },
+    "live_parallel_multiple": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_parallel_multiple_",
+    },
+    "live_irrelevance": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_irrelevance_",
+    },
+    "live_relevance": {
+        "data_path": BFCL_DATA_DIR / "live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "live_split_ids.json",
+        "task_prefix": "live_relevance_",
+    },
+    "non_live": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+    },
+    "simple": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "simple_python_",
+    },
+    "simple_python": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "simple_python_",
+    },
+    "simple_java": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "simple_java_",
+    },
+    "simple_javascript": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "simple_javascript_",
+    },
+    "multiple": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "multiple_",
+    },
+    "parallel": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "parallel_",
+    },
+    "parallel_multiple": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "parallel_multiple_",
+    },
+    "irrelevance": {
+        "data_path": BFCL_DATA_DIR / "non_live_processed.jsonl",
+        "split_ids_path": BFCL_DATA_DIR / "non_live_split_ids.json",
+        "task_prefix": "irrelevance_",
+    },
+}
+
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
@@ -161,6 +279,30 @@ def _read_split_ids(path: Path, split: str) -> List[str]:
     return [str(task_id) for task_id in task_ids]
 
 
+def _normalize_benchmark_name(raw_name: Optional[str]) -> Optional[str]:
+    if raw_name is None:
+        return None
+    benchmark = str(raw_name).strip().lower()
+    if not benchmark:
+        return None
+    return _BENCHMARK_ALIASES.get(benchmark, benchmark)
+
+
+def _resolve_benchmark_preset(raw_name: Optional[str]) -> Dict[str, Any]:
+    benchmark = _normalize_benchmark_name(raw_name)
+    if benchmark is None:
+        return {}
+    if benchmark not in _BENCHMARK_PRESETS:
+        supported = ", ".join(sorted(_BENCHMARK_PRESETS))
+        raise ValueError(f"Unsupported BFCL benchmark '{raw_name}'. Supported values: {supported}")
+
+    preset = dict(_BENCHMARK_PRESETS[benchmark])
+    preset["benchmark"] = benchmark
+    preset.setdefault("answer_path", BFCL_ANSWER_DIR)
+    preset.setdefault("split", "val")
+    return preset
+
+
 def _select_task_ids(config: "RunnerConfig") -> List[str]:
     if config.bfcl.task_ids:
         task_ids = [str(task_id) for task_id in config.bfcl.task_ids]
@@ -177,7 +319,8 @@ def _select_task_ids(config: "RunnerConfig") -> List[str]:
         task_ids = task_ids[: config.bfcl.max_tasks]
 
     if not task_ids:
-        raise ValueError("No BFCL tasks matched the current selection")
+        selection = config.bfcl.benchmark or config.bfcl.task_prefix or config.bfcl.task_contains or config.bfcl.split
+        raise ValueError(f"No BFCL tasks matched the current selection: {selection}")
 
     return task_ids
 
@@ -209,6 +352,7 @@ class BfclConfig:
     data_path: Path
     answer_path: Path
     split_ids_path: Path
+    benchmark: Optional[str] = None
     split: str = "test"
     task_ids: List[str] = field(default_factory=list)
     task_prefix: Optional[str] = None
@@ -518,6 +662,7 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
                 "use_tools_api": not args.disable_tools_api,
             },
             "bfcl": {
+                "benchmark": args.benchmark,
                 "data_path": args.data_path,
                 "answer_path": args.answer_path,
                 "split_ids_path": args.split_ids_path,
@@ -542,6 +687,16 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
     model_raw = raw.get("model") or {}
     bfcl_raw = raw.get("bfcl") or {}
     run_raw = raw.get("run") or {}
+    preset_bfcl_raw = _resolve_benchmark_preset(bfcl_raw.get("benchmark"))
+    merged_bfcl_raw = {**preset_bfcl_raw, **{key: value for key, value in bfcl_raw.items() if value is not None}}
+    if not merged_bfcl_raw.get("data_path"):
+        merged_bfcl_raw["data_path"] = "env_service/environments/bfcl/bfcl_data/multi_turn_processed.jsonl"
+    if not merged_bfcl_raw.get("answer_path"):
+        merged_bfcl_raw["answer_path"] = "env_service/environments/bfcl/bfcl_eval/possible_answer"
+    if not merged_bfcl_raw.get("split_ids_path"):
+        merged_bfcl_raw["split_ids_path"] = "env_service/environments/bfcl/bfcl_data/multi_turn_split_ids.json"
+    if merged_bfcl_raw.get("split") is None:
+        merged_bfcl_raw["split"] = "test"
 
     model_config = ModelConfig(
         base_url=model_raw["base_url"],
@@ -556,15 +711,16 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
     )
 
     bfcl_config = BfclConfig(
-        data_path=_resolve_path(config_base_dir, bfcl_raw["data_path"], required=True),
-        answer_path=_resolve_path(config_base_dir, bfcl_raw["answer_path"], required=True),
-        split_ids_path=_resolve_path(config_base_dir, bfcl_raw["split_ids_path"], required=True),
-        split=str(bfcl_raw.get("split", "test")),
-        task_ids=[str(task_id) for task_id in bfcl_raw.get("task_ids", [])],
-        task_prefix=bfcl_raw.get("task_prefix"),
-        task_contains=bfcl_raw.get("task_contains"),
-        max_tasks=int(bfcl_raw["max_tasks"]) if bfcl_raw.get("max_tasks") is not None else None,
-        is_open_query=bool(bfcl_raw.get("is_open_query", False)),
+        data_path=_resolve_path(config_base_dir, merged_bfcl_raw["data_path"], required=True),
+        answer_path=_resolve_path(config_base_dir, merged_bfcl_raw["answer_path"], required=True),
+        split_ids_path=_resolve_path(config_base_dir, merged_bfcl_raw["split_ids_path"], required=True),
+        benchmark=merged_bfcl_raw.get("benchmark"),
+        split=str(merged_bfcl_raw.get("split", "test")),
+        task_ids=[str(task_id) for task_id in merged_bfcl_raw.get("task_ids", [])],
+        task_prefix=merged_bfcl_raw.get("task_prefix"),
+        task_contains=merged_bfcl_raw.get("task_contains"),
+        max_tasks=int(merged_bfcl_raw["max_tasks"]) if merged_bfcl_raw.get("max_tasks") is not None else None,
+        is_open_query=bool(merged_bfcl_raw.get("is_open_query", False)),
     )
 
     output_dir = _resolve_path(config_base_dir, run_raw["output_dir"], required=False)
@@ -608,10 +764,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--disable-tools-api", action="store_true", help="Do not pass tools to the API. The model must emit <tool_call> tags in plain text.")
 
-    parser.add_argument("--data-path", default="env_service/environments/bfcl/bfcl_data/multi_turn_processed.jsonl")
-    parser.add_argument("--answer-path", default="env_service/environments/bfcl/bfcl_eval/possible_answer")
-    parser.add_argument("--split-ids-path", default="env_service/environments/bfcl/bfcl_data/multi_turn_split_ids.json")
-    parser.add_argument("--split", default="test")
+    parser.add_argument("--benchmark", default=None, help="High-level BFCL benchmark selector, such as multi_turn, multi_turn_base, multi_turn_miss_func, multi_turn_miss_param, multi_turn_long_context, single_turn, live, non_live, live_simple, live_multiple, live_parallel, live_parallel_multiple, live_irrelevance, live_relevance, simple, simple_python, simple_java, simple_javascript, multiple, parallel, parallel_multiple, irrelevance.")
+    parser.add_argument("--data-path", default=None)
+    parser.add_argument("--answer-path", default=None)
+    parser.add_argument("--split-ids-path", default=None)
+    parser.add_argument("--split", default=None)
     parser.add_argument("--task-ids", default="", help="Comma-separated task ids. When set, split selection is ignored.")
     parser.add_argument("--task-prefix", default=None, help="Keep only task ids starting with this prefix.")
     parser.add_argument("--task-contains", default=None, help="Keep only task ids containing this text.")
