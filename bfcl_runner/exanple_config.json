@@ -1,0 +1,29 @@
+{
+  "model": {
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key": "${OPENAI_API_KEY}",
+    "model": "your-model-name",
+    "temperature": 0.0,
+    "max_tokens": 2048,
+    "timeout": 180,
+    "use_tools_api": true,
+    "extra_body": {}
+  },
+  "bfcl": {
+    "data_path": "../env_service/environments/bfcl/bfcl_data/multi_turn_processed.jsonl",
+    "answer_path": "../env_service/environments/bfcl/bfcl_eval/possible_answer",
+    "split_ids_path": "../env_service/environments/bfcl/bfcl_data/multi_turn_split_ids.json",
+    "split": "test",
+    "task_ids": [],
+    "task_prefix": "multi_turn_base_",
+    "task_contains": null,
+    "max_tasks": 20,
+    "is_open_query": false
+  },
+  "run": {
+    "output_dir": "./output/demo_run",
+    "max_turns": 24,
+    "stop_on_error": false,
+    "save_trace": true
+  }
+}
