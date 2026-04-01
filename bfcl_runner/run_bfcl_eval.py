@@ -383,7 +383,8 @@ class BfclEvaluatorRunner:
 
                 messages.append(env_action)
                 messages.append({"role": "user", "content": env_state.get("content", "")})
-                tools = self._current_tools(env)
+                if not terminated:
+                    tools = self._current_tools(env)
 
                 trace.append(
                     {
