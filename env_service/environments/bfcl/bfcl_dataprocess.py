@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
         result = bfcl_task_preprocess(
             test_categories=[test_categories],
-            train_ratio=0.5,
+            train_ratio=0,
             output_dir="./bfcl_data",
         )
 
