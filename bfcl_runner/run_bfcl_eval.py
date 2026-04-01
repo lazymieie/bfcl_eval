@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import re
@@ -222,6 +223,7 @@ class RunConfig:
     max_turns: int = 24
     stop_on_error: bool = False
     save_trace: bool = True
+    parallelism: int = 1
 
 
 @dataclass
@@ -334,19 +336,47 @@ class BfclEvaluatorRunner:
         _ensure_dir(self.config.run.output_dir)
         task_ids = _select_task_ids(self.config)
         started_at = time.time()
+        indexed_results: List[Optional[Dict[str, Any]]] = [None] * len(task_ids)
 
-        for index, task_id in enumerate(task_ids, start=1):
-            print(f"[{index}/{len(task_ids)}] Running {task_id} ...", flush=True)
-            result = self.run_single_task(task_id)
-            self.results.append(result)
-            summary_text = (
-                f"score={result.get('score', 0.0):.4f}, "
-                f"turns={result.get('turns_completed', 0)}, "
-                f"status={result.get('status')}"
+        if self.config.run.parallelism <= 1:
+            for index, task_id in enumerate(task_ids, start=1):
+                print(f"[{index}/{len(task_ids)}] Running {task_id} ...", flush=True)
+                result = self.run_single_task(task_id)
+                indexed_results[index - 1] = result
+                summary_text = (
+                    f"score={result.get('score', 0.0):.4f}, "
+                    f"turns={result.get('turns_completed', 0)}, "
+                    f"status={result.get('status')}"
+                )
+                print(f"  -> {summary_text}", flush=True)
+                if result["status"] == "error" and self.config.run.stop_on_error:
+                    raise RuntimeError(f"Stopped on error for task {task_id}")
+        else:
+            print(
+                f"Running {len(task_ids)} BFCL tasks with {self.config.run.parallelism} threads ...",
+                flush=True,
             )
-            print(f"  -> {summary_text}", flush=True)
-            if result["status"] == "error" and self.config.run.stop_on_error:
-                raise RuntimeError(f"Stopped on error for task {task_id}")
+            with ThreadPoolExecutor(max_workers=self.config.run.parallelism) as executor:
+                future_to_meta = {
+                    executor.submit(self.run_single_task, task_id): (index, task_id)
+                    for index, task_id in enumerate(task_ids, start=1)
+                }
+                completed = 0
+                for future in as_completed(future_to_meta):
+                    index, task_id = future_to_meta[future]
+                    result = future.result()
+                    indexed_results[index - 1] = result
+                    completed += 1
+                    summary_text = (
+                        f"score={result.get('score', 0.0):.4f}, "
+                        f"turns={result.get('turns_completed', 0)}, "
+                        f"status={result.get('status')}"
+                    )
+                    print(f"[{completed}/{len(task_ids)}] Finished {task_id} -> {summary_text}", flush=True)
+                    if result["status"] == "error" and self.config.run.stop_on_error:
+                        raise RuntimeError(f"Stopped on error for task {task_id}")
+
+        self.results = [result for result in indexed_results if result is not None]
 
         summary = self._build_summary(task_ids, started_at)
         _write_jsonl(self.config.run.output_dir / "results.jsonl", self.results)
@@ -503,6 +533,7 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
                 "max_turns": args.max_turns,
                 "stop_on_error": args.stop_on_error,
                 "save_trace": not args.no_save_trace,
+                "parallelism": args.parallelism,
             },
         }
         raw = _expand_env_vars(raw)
@@ -545,6 +576,7 @@ def _load_runner_config(args: argparse.Namespace) -> RunnerConfig:
         max_turns=int(run_raw.get("max_turns", 24)),
         stop_on_error=bool(run_raw.get("stop_on_error", False)),
         save_trace=bool(run_raw.get("save_trace", True)),
+        parallelism=max(1, int(run_raw.get("parallelism", 1))),
     )
 
     return RunnerConfig(
@@ -590,6 +622,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-turns", type=int, default=24)
     parser.add_argument("--stop-on-error", action="store_true")
     parser.add_argument("--no-save-trace", action="store_true")
+    parser.add_argument("--parallelism", type=int, default=1, help="Number of worker threads for concurrent task evaluation.")
     return parser
 
 
