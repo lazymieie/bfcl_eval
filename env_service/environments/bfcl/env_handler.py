@@ -65,7 +65,10 @@ class EnvHandler:
             model_name: Name of the model to use. Defaults to "env_handler".
         """
         self.original_model_name = model_name
-        self.model_name = (
+        # Preserve the original model name for evaluation/checker logic.
+        # A separate filesystem-safe variant can be used only where needed.
+        self.model_name = model_name
+        self.safe_model_name = (
             model_name.replace("/", "_").replace("-", "_").replace(".", "_")
         )
         self.model_style = ModelStyle.OPENAI_COMPLETIONS
