@@ -251,7 +251,7 @@ class BfclEnv(BaseEnv):
         self.current_turn = 0
 
         # 工具信息
-        tools = self.test_entry.get("function", [])
+        tools = self.env_handler._compile_tools(self.original_test_entry)
         # print("tools:", tools)
         self.tools_info = "Available tools:\n" + "\n".join(
             f"- {t.get('function', {}).get('name', 'unknown')}" for t in tools
