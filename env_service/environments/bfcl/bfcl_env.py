@@ -231,6 +231,7 @@ class BfclEnv(BaseEnv):
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.tools_info = ""
+        self.last_tool_prompt = ""
 
     # ------------------------------------------------------------------ #
     # 生命周期
@@ -269,6 +270,7 @@ class BfclEnv(BaseEnv):
         # function_docs = func_doc_language_specific_pre_processing(functions, test_category)
         # system_prompt = system_prompt_template.format(functions=function_docs)
         tool_prompt = tools_schema_to_qwen_prompt(tools)
+        self.last_tool_prompt = tool_prompt
         return {
             # system_prompt + "\n\n" + first_query
             "state": [
@@ -366,12 +368,13 @@ class BfclEnv(BaseEnv):
                 updated_tools = env_resp.get("tools", [])
                 if updated_tools:
                     updated_tool_prompt = tools_schema_to_qwen_prompt(updated_tools)
-                    if updated_tool_prompt:
+                    if updated_tool_prompt and updated_tool_prompt != self.last_tool_prompt:
                         next_msg_content = (
                             f"{updated_tool_prompt}\n\n{next_msg_content}"
                             if next_msg_content
                             else updated_tool_prompt
                         )
+                        self.last_tool_prompt = updated_tool_prompt
                 self.current_turn += 1
             elif msg["role"] == "env":
                 # two situations:
