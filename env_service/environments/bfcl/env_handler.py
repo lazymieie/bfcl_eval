@@ -1,6 +1,7 @@
 import json
 import time
 import os
+from copy import deepcopy
 from typing import Dict, List, Any, Optional, Union
 import warnings
 import tempfile
@@ -308,7 +309,7 @@ class EnvHandler:
         """
         excluded_function_names = set(test_entry.get("excluded_function", []))
         functions: list = [
-            function
+            deepcopy(function)
             for function in test_entry["function"]
             if function.get("name") not in excluded_function_names
         ]

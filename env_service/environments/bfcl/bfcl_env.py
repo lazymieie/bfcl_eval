@@ -17,6 +17,7 @@ limitations under the License.
 # environments/bfcl_env.py
 from __future__ import annotations
 import json, os
+import copy
 from pathlib import Path
 from typing import Any, Dict, List
 import re
@@ -257,26 +258,8 @@ class BfclEnv(BaseEnv):
             f"- {t.get('function', {}).get('name', 'unknown')}" for t in tools
         )
 
-        first_query = (
-            self.conversation_history[0]["content"] if self.conversation_history else ""
-        )
-
-        # add system prompt: czy-0709
-        # from bfcl_eval.constants.default_prompts import DEFAULT_SYSTEM_PROMPT
-        # from bfcl_eval.model_handler.utils import func_doc_language_specific_pre_processing
-        # system_prompt_template = DEFAULT_SYSTEM_PROMPT
-        # functions = self.original_test_entry["function"]
-        # test_category = self.test_entry["id"].rsplit("_", 1)[0]
-        # function_docs = func_doc_language_specific_pre_processing(functions, test_category)
-        # system_prompt = system_prompt_template.format(functions=function_docs)
-        tool_prompt = tools_schema_to_qwen_prompt(tools)
-        self.last_tool_prompt = tool_prompt
         return {
-            # system_prompt + "\n\n" + first_query
-            "state": [
-                {"role": "system", "content": tool_prompt},
-                {"role": "user", "content": first_query}
-                ],
+            "state": copy.deepcopy(self.conversation_history),
             "info": {
                 "instance_id": self.instance_id,
                 "task_id": self.task_id,
@@ -365,16 +348,6 @@ class BfclEnv(BaseEnv):
                 next_msg_content += tool_message_to_qwen_text(msg)
             elif msg["role"] == "user":
                 next_msg_content = msg.get("content", "")
-                updated_tools = env_resp.get("tools", [])
-                if updated_tools:
-                    updated_tool_prompt = tools_schema_to_qwen_prompt(updated_tools)
-                    if updated_tool_prompt and updated_tool_prompt != self.last_tool_prompt:
-                        next_msg_content = (
-                            f"{updated_tool_prompt}\n\n{next_msg_content}"
-                            if next_msg_content
-                            else updated_tool_prompt
-                        )
-                        self.last_tool_prompt = updated_tool_prompt
                 self.current_turn += 1
             elif msg["role"] == "env":
                 # two situations:

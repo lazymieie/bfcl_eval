@@ -391,6 +391,54 @@ def _coerce_usage(payload: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
+def _tools_schema_to_prompt(tools: List[Dict[str, Any]]) -> str:
+    if not tools:
+        return ""
+
+    lines = [
+        "# Tools",
+        "",
+        "You may call one or more functions to assist with the user query.",
+        "",
+        "You are provided with function signatures within <tools></tools> XML tags:",
+        "<tools>",
+    ]
+    for tool in tools:
+        lines.append(json.dumps(tool, ensure_ascii=False, separators=(",", ":")))
+    lines.extend(
+        [
+            "</tools>",
+            "",
+            "Important: Always use only the latest tool list provided, ignoring any functions mentioned in previous messages.",
+            "For each function call, return a json object with function name and arguments within <tool_call> and <tool_call> XML tags:",
+            "<tool_call>",
+            '{"name": <function-name>, "arguments": <args-json-object>}',
+            "</tool_call>",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _inject_tools_into_messages(
+    messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    request_messages = copy.deepcopy(messages)
+    if not tools:
+        return request_messages
+
+    tool_prompt = _tools_schema_to_prompt(tools)
+    if request_messages and request_messages[0].get("role") == "system":
+        existing_content = _coerce_message_content(request_messages[0].get("content"))
+        request_messages[0]["content"] = (
+            f"{existing_content}\n\n{tool_prompt}" if existing_content else tool_prompt
+        )
+    else:
+        request_messages.insert(0, {"role": "system", "content": tool_prompt})
+
+    return request_messages
+
+
 def _task_category_from_id(task_id: str) -> str:
     parts = str(task_id).rsplit("_", 1)
     if len(parts) == 2:
@@ -449,16 +497,22 @@ class OpenAICompatibleClient:
         self.config = config
         self.url = f"{config.base_url.rstrip('/')}/chat/completions"
 
-    def create_chat_completion(
+    def _build_payload(
         self,
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]],
+        max_tokens: int,
     ) -> Dict[str, Any]:
+        request_messages = (
+            copy.deepcopy(messages)
+            if self.config.use_tools_api
+            else _inject_tools_into_messages(messages, tools)
+        )
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": messages,
+            "messages": request_messages,
             "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": max_tokens,
             "stream": False,
         }
         if self.config.use_tools_api and tools:
@@ -466,7 +520,9 @@ class OpenAICompatibleClient:
             payload["tool_choice"] = "auto"
         if self.config.extra_body:
             payload.update(copy.deepcopy(self.config.extra_body))
+        return payload
 
+    def _post_chat_completion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         req = request.Request(
             self.url,
             data=json.dumps(payload).encode("utf-8"),
@@ -474,19 +530,76 @@ class OpenAICompatibleClient:
             method="POST",
         )
 
-        try:
-            with request.urlopen(req, timeout=self.config.timeout) as response:
-                body = response.read().decode("utf-8")
-        except error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Model API returned HTTP {exc.code}: {detail}") from exc
-        except error.URLError as exc:
-            raise RuntimeError(f"Model API request failed: {exc}") from exc
+        with request.urlopen(req, timeout=self.config.timeout) as response:
+            body = response.read().decode("utf-8")
 
         try:
-            data = json.loads(body)
+            return json.loads(body)
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Model API returned non-JSON response: {body[:500]}") from exc
+
+    def _get_retryable_max_tokens_from_error(self, detail: str) -> Optional[int]:
+        try:
+            error_payload = json.loads(detail)
+        except json.JSONDecodeError:
+            error_payload = {}
+
+        message = (
+            error_payload.get("error", {}).get("message")
+            if isinstance(error_payload, dict)
+            else None
+        ) or detail
+
+        match = re.search(
+            r"maximum context length is (\d+) tokens and your request has (\d+) input tokens",
+            message,
+        )
+        if not match:
+            return None
+
+        context_limit = int(match.group(1))
+        input_tokens = int(match.group(2))
+        available_tokens = max(1, context_limit - input_tokens - 16)
+        if available_tokens >= self.config.max_tokens:
+            return None
+        return available_tokens
+
+    def create_chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        payload = self._build_payload(messages, tools, self.config.max_tokens)
+
+        try:
+            data = self._post_chat_completion(payload)
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            retry_max_tokens = (
+                self._get_retryable_max_tokens_from_error(detail)
+                if exc.code == 400
+                else None
+            )
+            if retry_max_tokens is not None:
+                retry_payload = self._build_payload(messages, tools, retry_max_tokens)
+                try:
+                    data = self._post_chat_completion(retry_payload)
+                except error.HTTPError as retry_exc:
+                    retry_detail = retry_exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        "Model API returned HTTP "
+                        f"{retry_exc.code} after retry with reduced max_tokens="
+                        f"{retry_max_tokens}: {retry_detail}"
+                    ) from retry_exc
+                except error.URLError as retry_exc:
+                    raise RuntimeError(
+                        "Model API request failed after retry with reduced "
+                        f"max_tokens={retry_max_tokens}: {retry_exc}"
+                    ) from retry_exc
+            else:
+                raise RuntimeError(f"Model API returned HTTP {exc.code}: {detail}") from exc
+        except error.URLError as exc:
+            raise RuntimeError(f"Model API request failed: {exc}") from exc
 
         choices = data.get("choices") or []
         if not choices:
