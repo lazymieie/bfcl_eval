@@ -21,6 +21,7 @@ from bfcl_eval.model_handler.utils import (
 from bfcl_eval.utils import _func_doc_language_specific_pre_processing
 
 from bfcl_eval.constants.type_mappings import GORILLA_TO_OPENAPI
+from bfcl_eval.constants.model_config import MODEL_CONFIG_MAPPING
 from bfcl_eval.constants.default_prompts import (
     DEFAULT_USER_PROMPT_FOR_ADDITIONAL_FUNCTION_FC,
 )
@@ -383,6 +384,28 @@ class EnvHandler:
         """
         return default_decode_execute_prompting(result)
 
+    def _debug_model_mapping_status(self, model_name: str) -> None:
+        candidates: List[str] = []
+        for candidate in [
+            self.original_model_name,
+            model_name,
+            str(model_name).replace("_", "/"),
+            str(model_name).replace("-", "/"),
+        ]:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        matched_key = next((candidate for candidate in candidates if candidate in MODEL_CONFIG_MAPPING), None)
+        print(
+            "[BFCL model debug] "
+            f"original_model_name={self.original_model_name!r}, "
+            f"eval_model_name={model_name!r}, "
+            f"lookup_candidates={candidates!r}, "
+            f"mapping_found={matched_key is not None}, "
+            f"matched_key={matched_key!r}",
+            flush=True,
+        )
+
     def evaluate(self, test_entry: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate function for single test case.
@@ -420,6 +443,7 @@ class EnvHandler:
             category = test_id.rsplit("_", 1)[0] if "_" in test_id else test_id
 
             model_name = self.model_name
+            self._debug_model_mapping_status(model_name)
             # from bfcl_eval.model_handler.api_inference.qwq import QwenAPIHandler
             from bfcl_eval.model_handler.api_inference.qwen import QwenAPIHandler #### qwq->qwen
             
