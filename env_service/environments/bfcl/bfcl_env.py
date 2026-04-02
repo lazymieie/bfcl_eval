@@ -363,7 +363,15 @@ class BfclEnv(BaseEnv):
                 next_msg_content += tool_message_to_qwen_text(msg)
             elif msg["role"] == "user":
                 next_msg_content = msg.get("content", "")
-                # FIXME: yunpeng 更新新的tool schema到user msg里
+                updated_tools = env_resp.get("tools", [])
+                if updated_tools:
+                    updated_tool_prompt = tools_schema_to_qwen_prompt(updated_tools)
+                    if updated_tool_prompt:
+                        next_msg_content = (
+                            f"{updated_tool_prompt}\n\n{next_msg_content}"
+                            if next_msg_content
+                            else updated_tool_prompt
+                        )
                 self.current_turn += 1
             elif msg["role"] == "env":
                 # two situations:
