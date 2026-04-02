@@ -197,19 +197,50 @@ class EnvHandler:
         Returns:
             Response containing tool execution results
         """
-        execution_results, _ = execute_multi_turn_func_call(
-            func_call_list=decoded_calls,
-            initial_config=test_entry["initial_config"],
-            involved_classes=test_entry["involved_classes"],
-            model_name=self.model_name,
-            test_entry_id=test_entry["id"],
-            long_context=(
-                "long_context" in test_entry["id"] or "composite" in test_entry["id"]
-            ),
-            is_evaL_run=False,
-        )
+        available_tool_names = {
+            tool.get("function", {}).get("name", "")
+            for tool in self._compile_tools(test_entry)
+            if tool.get("function", {}).get("name")
+        }
 
-        return self._create_tool_response(tool_calls, execution_results)
+        available_tool_calls: List[Dict[str, Any]] = []
+        available_decoded_calls: List[str] = []
+        execution_results_by_index: List[Optional[str]] = [None] * len(tool_calls)
+
+        for index, (tool_call, decoded_call) in enumerate(zip(tool_calls, decoded_calls)):
+            function_name = tool_call.get("function", {}).get("name", "")
+            if function_name not in available_tool_names:
+                execution_results_by_index[index] = json.dumps(
+                    {
+                        "error": (
+                            f"Tool '{function_name}' is not available in the current turn."
+                        )
+                    }
+                )
+                continue
+
+            available_tool_calls.append(tool_call)
+            available_decoded_calls.append(decoded_call)
+
+        if available_decoded_calls:
+            available_execution_results, _ = execute_multi_turn_func_call(
+                func_call_list=available_decoded_calls,
+                initial_config=test_entry["initial_config"],
+                involved_classes=test_entry["involved_classes"],
+                model_name=self.model_name,
+                test_entry_id=test_entry["id"],
+                long_context=(
+                    "long_context" in test_entry["id"] or "composite" in test_entry["id"]
+                ),
+                is_evaL_run=False,
+            )
+
+            available_result_iter = iter(available_execution_results)
+            for index, result in enumerate(execution_results_by_index):
+                if result is None:
+                    execution_results_by_index[index] = next(available_result_iter)
+
+        return self._create_tool_response(tool_calls, execution_results_by_index)
 
     def _handle_user_turn(
         self, test_entry: Dict[str, Any], current_turn: int
@@ -234,7 +265,16 @@ class EnvHandler:
             )
 
             if str(current_turn) in holdout_function:
-                test_entry["function"].extend(holdout_function[str(current_turn)])
+                existing_function_names = {
+                    function.get("name", "") for function in test_entry["function"]
+                }
+                new_functions = [
+                    function
+                    for function in holdout_function[str(current_turn)]
+                    if function.get("name", "") not in existing_function_names
+                ]
+                if new_functions:
+                    test_entry["function"].extend(new_functions)
                 tools = self._compile_tools(test_entry)
                 assert (
                     len(questions[current_turn]) == 0
