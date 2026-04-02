@@ -391,6 +391,13 @@ def _coerce_usage(payload: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
+def _task_category_from_id(task_id: str) -> str:
+    parts = str(task_id).rsplit("_", 1)
+    if len(parts) == 2:
+        return parts[0]
+    return str(task_id)
+
+
 @dataclass
 class ModelConfig:
     base_url: str
@@ -682,6 +689,7 @@ class BfclEvaluatorRunner:
         scores = [float(item.get("score", 0.0) or 0.0) for item in self.results]
         total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         status_counter: Dict[str, int] = {}
+        category_breakdown: Dict[str, Dict[str, Any]] = {}
 
         for item in self.results:
             status = item.get("status", "unknown")
@@ -690,13 +698,43 @@ class BfclEvaluatorRunner:
             for key in total_usage:
                 total_usage[key] += int(usage.get(key, 0) or 0)
 
+            category = _task_category_from_id(item["task_id"])
+            if category not in category_breakdown:
+                category_breakdown[category] = {
+                    "task_count": 0,
+                    "score_sum": 0.0,
+                    "average_score": 0.0,
+                    "status_counter": {},
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                    "tasks": [],
+                }
+            category_entry = category_breakdown[category]
+            category_entry["task_count"] += 1
+            category_entry["score_sum"] += float(item.get("score", 0.0) or 0.0)
+            category_entry["tasks"].append(item["task_id"])
+            category_entry["status_counter"][status] = (
+                category_entry["status_counter"].get(status, 0) + 1
+            )
+            for key in category_entry["usage"]:
+                category_entry["usage"][key] += int(usage.get(key, 0) or 0)
+
         average_score = sum(scores) / len(scores) if scores else 0.0
+        for category_entry in category_breakdown.values():
+            category_entry["average_score"] = (
+                category_entry["score_sum"] / category_entry["task_count"]
+                if category_entry["task_count"]
+                else 0.0
+            )
+            del category_entry["score_sum"]
+
         return {
             "model": self.config.model.model,
             "base_url": self.config.model.base_url,
+            "benchmark": self.config.bfcl.benchmark,
             "task_count": len(task_ids),
             "average_score": average_score,
             "status_counter": status_counter,
+            "category_breakdown": category_breakdown,
             "duration_sec": round(time.time() - started_at, 3),
             "usage": total_usage,
             "tasks": [item["task_id"] for item in self.results],
