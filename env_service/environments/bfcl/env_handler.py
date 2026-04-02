@@ -229,7 +229,9 @@ class EnvHandler:
             current_turn_message = []
             tools = self._compile_tools(test_entry)
             questions = test_entry.get("question", [])
-            holdout_function = test_entry.get("holdout_function", {})
+            holdout_function = test_entry.get("holdout_function") or test_entry.get(
+                "missed_function", {}
+            )
 
             if str(current_turn) in holdout_function:
                 test_entry["function"].extend(holdout_function[str(current_turn)])
@@ -264,7 +266,12 @@ class EnvHandler:
         Returns:
             List of tools in OpenAI format
         """
-        functions: list = test_entry["function"]
+        excluded_function_names = set(test_entry.get("excluded_function", []))
+        functions: list = [
+            function
+            for function in test_entry["function"]
+            if function.get("name") not in excluded_function_names
+        ]
         test_category: str = test_entry["id"].rsplit("_", 1)[0]
 
         functions = _func_doc_language_specific_pre_processing(functions, test_category)
