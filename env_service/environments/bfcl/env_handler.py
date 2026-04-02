@@ -777,43 +777,47 @@ class EnvHandler:
         """
         turns_data = []
         current_turn_responses = []
+        in_user_turn = False
 
-        i = 0
-        while i < len(messages):
-            message = messages[i]
+        for message in messages:
+            role = message.get("role")
+            content = str(message.get("content", "") or "")
 
-            if message["role"] == "user":
-                if current_turn_responses:
+            if role == "user":
+                # In this env, tool execution feedback is also encoded as a user
+                # message whose content starts with <tool_call>. Those messages
+                # belong to the current high-level user turn and must not split
+                # the multi-turn trajectory.
+                is_tool_feedback = content.lstrip().startswith("<tool_call>")
+                is_conversation_end = content.strip() == "[CONVERSATION_COMPLETED]"
+
+                if is_tool_feedback or is_conversation_end:
+                    continue
+
+                if in_user_turn:
                     turns_data.append(current_turn_responses)
                     current_turn_responses = []
 
-                i += 1
-                while i < len(messages) and messages[i]["role"] == "assistant":
-                    assistant_msg = messages[i]
+                in_user_turn = True
+                continue
 
-                    if "tool_calls" in assistant_msg and assistant_msg["tool_calls"]:
-                        formatted_calls = []
-                        for tool_call in assistant_msg["tool_calls"]:
-                            formatted_call = self._format_single_tool_call_for_eval(
-                                tool_call
-                            )
-                            if formatted_call:
-                                formatted_calls.append(formatted_call)
-                        if formatted_calls:
-                            # Official BFCL multi-turn runner expects one string per
-                            # assistant step, then calls decode_execute on that step.
-                            current_turn_responses.append(", ".join(formatted_calls))
-                    elif assistant_msg.get("content"):
-                        current_turn_responses.append(str(assistant_msg["content"]))
+            if role != "assistant" or not in_user_turn:
+                continue
 
-                    i += 1
+            if "tool_calls" in message and message["tool_calls"]:
+                formatted_calls = []
+                for tool_call in message["tool_calls"]:
+                    formatted_call = self._format_single_tool_call_for_eval(tool_call)
+                    if formatted_call:
+                        formatted_calls.append(formatted_call)
+                if formatted_calls:
+                    # Official BFCL multi-turn runner expects one string per
+                    # assistant step, then calls decode_execute on that step.
+                    current_turn_responses.append(", ".join(formatted_calls))
+            elif message.get("content"):
+                current_turn_responses.append(str(message["content"]))
 
-                    while i < len(messages) and messages[i]["role"] == "tool":
-                        i += 1
-            else:
-                i += 1
-
-        if current_turn_responses:
+        if in_user_turn:
             turns_data.append(current_turn_responses)
 
         return turns_data
