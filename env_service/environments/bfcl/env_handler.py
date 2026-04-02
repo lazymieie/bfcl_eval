@@ -764,7 +764,9 @@ class EnvHandler:
             messages: List of conversation messages
 
         Returns:
-            List of turns, each turn is a list of function call strings
+            List of turns, where each turn is a list of assistant step strings.
+            Each step string may contain one or more function calls and will be
+            decoded later by the official multi-turn checker.
         """
         turns_data = []
         current_turn_responses = []
@@ -783,12 +785,19 @@ class EnvHandler:
                     assistant_msg = messages[i]
 
                     if "tool_calls" in assistant_msg and assistant_msg["tool_calls"]:
+                        formatted_calls = []
                         for tool_call in assistant_msg["tool_calls"]:
                             formatted_call = self._format_single_tool_call_for_eval(
                                 tool_call
                             )
                             if formatted_call:
-                                current_turn_responses.append(formatted_call)
+                                formatted_calls.append(formatted_call)
+                        if formatted_calls:
+                            # Official BFCL multi-turn runner expects one string per
+                            # assistant step, then calls decode_execute on that step.
+                            current_turn_responses.append(", ".join(formatted_calls))
+                    elif assistant_msg.get("content"):
+                        current_turn_responses.append(str(assistant_msg["content"]))
 
                     i += 1
 
